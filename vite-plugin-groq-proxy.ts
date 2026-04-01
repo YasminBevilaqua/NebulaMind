@@ -2,9 +2,7 @@ import type { Connect, PreviewServer, ViteDevServer } from "vite";
 import { loadEnv } from "vite";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { Readable } from "node:stream";
-import { SYSTEM_PROMPT } from "./src/lib/nebulaSystemPrompt";
-
-const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+import { buildGroqPayload, GROQ_URL } from "./src/lib/groqProxyShared";
 
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -33,7 +31,6 @@ function attachGroqMiddleware(
       return;
     }
 
-    // Prefixo GROQ_: inclui GROQ_API_KEY dos .env e do process.env (não uses VITE_ para segredos)
     const env = loadEnv(mode, envDir, "GROQ_");
     const key = (env.GROQ_API_KEY ?? process.env.GROQ_API_KEY)?.trim();
     if (!key) {
@@ -61,17 +58,7 @@ function attachGroqMiddleware(
         return;
       }
 
-      const groqPayload = {
-        // IDs atuais: ver https://console.groq.com/docs/models (llama3-8b-8192 foi descontinuado)
-        model: "llama-3.1-8b-instant",
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content },
-        ],
-        max_tokens: 1024,
-        temperature: 0.65,
-        ...(wantsStream ? { stream: true as const } : {}),
-      };
+      const groqPayload = buildGroqPayload(content, wantsStream);
 
       const groqRes = await fetch(GROQ_URL, {
         method: "POST",
